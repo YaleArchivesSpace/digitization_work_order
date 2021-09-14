@@ -18,7 +18,7 @@ class GoobiExport
   def column_definitions
     [
       # Local record ID {fdid=57}
-      {:header => "aspace_uri",              :proc => Proc.new {|row| local_record_id(row)}}, # NEW ish -- was 56 but needed to be moved to 57
+      {:header => "aspace_uri",             :proc => Proc.new {|row| local_record_id(row)}}, # NEW ish -- was 56 but needed to be moved to 57
       # Call number {fdid=58}
       {:header => "callNumber",             :proc => Proc.new {|row| call_number(row)}},
       # Box {fdid=60}
@@ -28,11 +28,13 @@ class GoobiExport
       # Host, Title {fdid=63}
       {:header => "hostTitle",              :proc => Proc.new {|row| host_title(row)}},
       # Dates Inclusive/Bulk {fdid=66}
-      {:header => "dates",                  :proc => Proc.new {|row| collection_creation_years(row)}},
+      {:header => "hostDate",               :proc => Proc.new {|row| collection_creation_years(row)}},
       # Host, note {fdid=68}
-      {:header => "sourceNote",           :proc => Proc.new {|row| host_note(row)}},
+      {:header => "sourceNote",             :proc => Proc.new {|row| host_note(row)}},
       # Title {fdid=70}
       {:header => "title",                  :proc => Proc.new {|row| title(row)}},
+      # Component date(s) {fdid=79}
+      {:header => "date",                   :proc => Proc.new {|row| creation_date(row)}},
       # Physical description {fdid=82}
       {:header => "physDesc",               :proc => Proc.new {|row| physical_description(row)}},
       # Note {fdid=86}
@@ -85,7 +87,7 @@ class GoobiExport
     dataset.all.sort{|x,y| @ids.index(x[:archival_object_id]) <=> @ids.index(y[:archival_object_id])}.each do |row|
       row_ix += 1
       row_style = nil
-      
+
       if has_digital_object_instances?(row[:archival_object_id])
         row_style = highlight
       end
@@ -149,7 +151,7 @@ class GoobiExport
 
     @romans ||= { 1000 => "M", 900 => "CM", 500 => "D", 400 => "CD", 100 => "C",
                   90 => "XC", 50 => "L", 40 => "XL", 10 => "X",
-                  9 => "IX", 5 => "V", 4 => "IV", 1 => "I" } 
+                  9 => "IX", 5 => "V", 4 => "IV", 1 => "I" }
 
     @romans.reduce("") do |res, (arab, roman)|
       whole_part, n = n.divmod(arab)
@@ -182,7 +184,7 @@ class GoobiExport
     ds = ds.select_append(Sequel.as(:resource__title, :resource_title))
     ds = ds.select_append(Sequel.as(:resource__ead_location, :resource_ead_location))
 
-    # top container bits 
+    # top container bits
     ds = ds.select_append(Sequel.as(:top_container__indicator, :top_container_indicator))
     ds = ds.select_append(Sequel.as(:top_container__barcode, :top_container_barcode))
 
@@ -598,7 +600,7 @@ class GoobiExport
     non_bulk = dates.select{|d| d.date_type != 'bulk'}
     bulk = dates.find{|d| d.date_type == 'bulk'}
 
-    def fmt_date(date) 
+    def fmt_date(date)
       date[:expression] || [(date[:begin] || '').sub(/-.*/, ''), (date[:end] || '').sub(/-.*/, '')].select{|d| !d.empty?}.compact.uniq.join('-')
     end
 
