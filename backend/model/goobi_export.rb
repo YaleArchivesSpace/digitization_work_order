@@ -19,12 +19,16 @@ class GoobiExport
     [
       # Local record ID {fdid=57}
       {:header => "aspace_uri",             :proc => Proc.new {|row| local_record_id(row)}}, # NEW ish -- was 56 but needed to be moved to 57
+      # ASpace UUID, in case archival object record is deleted (we can re-post this ID to a new object)
+      {:header => "refID",                  :proc => Proc.new {|row| ref_id(row)}},
       # Call number {fdid=58}
       {:header => "callNumber",             :proc => Proc.new {|row| call_number(row)}},
       # Box {fdid=60}
       {:header => "container(Box)",         :proc => Proc.new {|row| box(row)}},
       # Folder {fdid=61}
       {:header => "subcontainer(Folder)",   :proc => Proc.new {|row| folder(row)}},
+      # Item Barcode (for as long as we use that hack, which might be a while since the other barcode that was added to core ASpace is only available at the child indicator level and not also the grandchild level.)
+      {:header => "item_barcode",           :proc => Proc.new {|row| item_barcode(row)}},
       # Host, Title {fdid=63}
       {:header => "hostTitle",              :proc => Proc.new {|row| host_title(row)}},
       # Dates Inclusive/Bulk {fdid=66}
@@ -408,6 +412,10 @@ class GoobiExport
     "/repositories/#{row[:repo_id]}/archival_objects/#{row[:archival_object_id]}"
   end
 
+  def ref_id(row)
+    row[:ref_id]
+  end
+
   def call_number(row)
     JSON.parse(row[:resource_identifier]).compact.join(' ')
   end
@@ -422,6 +430,10 @@ class GoobiExport
 
   def folder(row)
     row[:sub_container_indicator] if row[:sub_container_type] == 'folder'
+  end
+
+  def item_barcode(row)
+    row[:sub_container_indicator] if row[:sub_container_type] == 'item_barcode'
   end
 
   def host_title(row)
