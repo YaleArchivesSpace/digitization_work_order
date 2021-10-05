@@ -18,29 +18,35 @@ class GoobiExport
   def column_definitions
     [
       # Local record ID {fdid=57}
-      {:header => "aspace_uri",              :proc => Proc.new {|row| local_record_id(row)}}, # NEW ish -- was 56 but needed to be moved to 57
+      {:header => "aspace_uri",             :proc => Proc.new {|row| local_record_id(row)}}, # NEW ish -- was 56 but needed to be moved to 57
+      # ASpace UUID, in case archival object record is deleted (we can re-post this ID to a new object)
+      {:header => "refID",                  :proc => Proc.new {|row| ref_id(row)}},
       # Call number {fdid=58}
       {:header => "callNumber",             :proc => Proc.new {|row| call_number(row)}},
       # Box {fdid=60}
       {:header => "container(Box)",         :proc => Proc.new {|row| box(row)}},
       # Folder {fdid=61}
       {:header => "subcontainer(Folder)",   :proc => Proc.new {|row| folder(row)}},
+      # Item Barcode (for as long as we use that hack, which might be a while since the other barcode that was added to core ASpace is only available at the child indicator level and not also the grandchild level.)
+      {:header => "item_barcode",           :proc => Proc.new {|row| item_barcode(row)}},
       # Host, Title {fdid=63}
       {:header => "hostTitle",              :proc => Proc.new {|row| host_title(row)}},
       # Dates Inclusive/Bulk {fdid=66}
-      {:header => "dates",                  :proc => Proc.new {|row| collection_creation_years(row)}},
+      {:header => "hostDate",               :proc => Proc.new {|row| collection_creation_years(row)}},
       # Host, note {fdid=68}
-      {:header => "sourceNote",           :proc => Proc.new {|row| host_note(row)}},
+      {:header => "sourceNote",             :proc => Proc.new {|row| host_note(row)}},
       # Title {fdid=70}
       {:header => "title",                  :proc => Proc.new {|row| title(row)}},
+      # Component date(s) {fdid=79}
+      {:header => "date",                   :proc => Proc.new {|row| creation_date(row)}},
       # Physical description {fdid=82}
       {:header => "physDesc",               :proc => Proc.new {|row| physical_description(row)}},
       # Note {fdid=86}
-      {:header => "note",              :proc => Proc.new {|row| note(row)}},
+      {:header => "note",                   :proc => Proc.new {|row| note(row)}},
       # Abstract {fdid=87}
       {:header => "abstract",               :proc => Proc.new {|row| abstract(row)}},
       # Barcode {fdid=105}
-      {:header => "aspace_barcode",                :proc => Proc.new {|row| barcode(row)}},
+      {:header => "aspace_barcode",         :proc => Proc.new {|row| barcode(row)}},
       # Publication Type
       {:header => "pubType",                :proc => Proc.new {|row| "ArchivalObject" }},
       # Collection
@@ -48,9 +54,19 @@ class GoobiExport
       # use opac
       {:header => "useOPAC",                :proc => Proc.new {|row| "TRUE" }},
       # use aspace opac
-      {:header => "opacName",               :proc => Proc.new {|row| "aspace" }},
-      #Process title
-      {:header => "processTitle",           :proc => Proc.new {|row| nil }}, #BLANK!
+      {:header => "opacName",               :proc => Proc.new {|row| "ArchivesSpace" }},
+      #Goobi Identifier
+      {:header => "goobiIdentifier",        :proc => Proc.new {|row| rand.to_s[2..14] }}, #random 13 digit
+      #Viewing Restriction
+      {:header => "yaleRestriction",        :proc => Proc.new {|row| nil }}, #BLANK!
+      #Copyright/use statement
+      {:header => "yaleUse",                :proc => Proc.new {|row| nil }}, #BLANK!
+      #Collection Owner
+      {:header => "yaleOwner",              :proc => Proc.new {|row| nil }}, #BLANK!
+      #Extent of Digitization
+      {:header => "extentDigitization",     :proc => Proc.new {|row| nil }}, #BLANK!
+      #Digitization Note
+      {:header => "digitizationNote",       :proc => Proc.new {|row| nil }}, #BLANK!
     ]
   end
 
@@ -75,7 +91,7 @@ class GoobiExport
     dataset.all.sort{|x,y| @ids.index(x[:archival_object_id]) <=> @ids.index(y[:archival_object_id])}.each do |row|
       row_ix += 1
       row_style = nil
-      
+
       if has_digital_object_instances?(row[:archival_object_id])
         row_style = highlight
       end
@@ -139,7 +155,7 @@ class GoobiExport
 
     @romans ||= { 1000 => "M", 900 => "CM", 500 => "D", 400 => "CD", 100 => "C",
                   90 => "XC", 50 => "L", 40 => "XL", 10 => "X",
-                  9 => "IX", 5 => "V", 4 => "IV", 1 => "I" } 
+                  9 => "IX", 5 => "V", 4 => "IV", 1 => "I" }
 
     @romans.reduce("") do |res, (arab, roman)|
       whole_part, n = n.divmod(arab)
@@ -172,7 +188,7 @@ class GoobiExport
     ds = ds.select_append(Sequel.as(:resource__title, :resource_title))
     ds = ds.select_append(Sequel.as(:resource__ead_location, :resource_ead_location))
 
-    # top container bits 
+    # top container bits
     ds = ds.select_append(Sequel.as(:top_container__indicator, :top_container_indicator))
     ds = ds.select_append(Sequel.as(:top_container__barcode, :top_container_barcode))
 
@@ -396,6 +412,10 @@ class GoobiExport
     "/repositories/#{row[:repo_id]}/archival_objects/#{row[:archival_object_id]}"
   end
 
+  def ref_id(row)
+    row[:ref_id]
+  end
+
   def call_number(row)
     JSON.parse(row[:resource_identifier]).compact.join(' ')
   end
@@ -410,6 +430,10 @@ class GoobiExport
 
   def folder(row)
     row[:sub_container_indicator] if row[:sub_container_type] == 'folder'
+  end
+
+  def item_barcode(row)
+    row[:sub_container_indicator] if row[:sub_container_type] == 'item_barcode'
   end
 
   def host_title(row)
@@ -588,7 +612,7 @@ class GoobiExport
     non_bulk = dates.select{|d| d.date_type != 'bulk'}
     bulk = dates.find{|d| d.date_type == 'bulk'}
 
-    def fmt_date(date) 
+    def fmt_date(date)
       date[:expression] || [(date[:begin] || '').sub(/-.*/, ''), (date[:end] || '').sub(/-.*/, '')].select{|d| !d.empty?}.compact.uniq.join('-')
     end
 
